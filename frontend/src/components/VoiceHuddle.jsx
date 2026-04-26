@@ -16,6 +16,7 @@ const VoiceHuddle = ({ selectedChannel, currentUser }) => {
  const [statusMessage, setStatusMessage] = useState("")
  const [callMode, setCallMode] = useState("audio")
  const [detailsOpen, setDetailsOpen] = useState(false)
+ const [huddleInvite, setHuddleInvite] = useState(null)
 
  const localStreamRef = useRef(null)
  const localVideoRef = useRef(null)
@@ -149,6 +150,11 @@ const VoiceHuddle = ({ selectedChannel, currentUser }) => {
   }
  }
 
+ const joinHuddle = async () => {
+  if (!huddleInvite?.active) return
+  await startHuddle(huddleInvite.mode === "video" ? "video" : "audio")
+ }
+
  const leaveHuddle = () => {
   if (activeChannelRef.current) {
    socket.emit("leaveVoiceChannel", { channelId: activeChannelRef.current })
@@ -274,6 +280,53 @@ const VoiceHuddle = ({ selectedChannel, currentUser }) => {
   }
  }, [callMode, currentUserId, currentUser?.name, inCall])
 
+ useEffect(() => {
+  const handleHuddleStarted = (payload) => {
+   if (payload.channelId !== selectedChannel?._id) return
+   if (payload.startedBy?.id === currentUserId) return
+
+   setHuddleInvite({
+    active: true,
+    startedBy: payload.startedBy,
+    participantCount: payload.participantCount || 1,
+    mode: payload.mode || "audio"
+   })
+  }
+
+  const handleHuddlePresence = (payload) => {
+   if (payload.channelId !== selectedChannel?._id) return
+
+   if (!payload.active) {
+    setHuddleInvite(null)
+    return
+   }
+
+   if (payload.startedBy?.id === currentUserId && !inCall) return
+
+   setHuddleInvite((prev) => ({
+    active: true,
+    startedBy: payload.startedBy || prev?.startedBy || null,
+    participantCount: payload.participantCount || prev?.participantCount || 1,
+    mode: payload.mode || prev?.mode || "audio"
+   }))
+  }
+
+  const handleHuddleEnded = (payload) => {
+   if (payload.channelId !== selectedChannel?._id) return
+   setHuddleInvite(null)
+  }
+
+  socket.on("huddleStarted", handleHuddleStarted)
+  socket.on("huddlePresence", handleHuddlePresence)
+  socket.on("huddleEnded", handleHuddleEnded)
+
+  return () => {
+   socket.off("huddleStarted", handleHuddleStarted)
+   socket.off("huddlePresence", handleHuddlePresence)
+   socket.off("huddleEnded", handleHuddleEnded)
+  }
+ }, [currentUserId, inCall, selectedChannel])
+
  useEffect(() => () => leaveHuddle(), [])
 
  useEffect(() => {
@@ -287,78 +340,98 @@ const VoiceHuddle = ({ selectedChannel, currentUser }) => {
   return undefined
  }, [inCall, selectedChannel])
 
+ useEffect(() => {
+  if (!selectedChannel) {
+   setHuddleInvite(null)
+  }
+ }, [selectedChannel])
+
  return (
-  <div className="glass-subtle rounded-[24px] px-4 py-4">
-   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-    <div>
-     <p className="eyebrow text-[11px] font-semibold uppercase tracking-[0.18em]">
-      Huddle
-     </p>
-     <p className="mt-1 text-sm text-secondary">{status}</p>
-    </div>
+  <div className="relative flex items-center gap-2">
+   {inCall ? (
+    <>
+     <button onClick={toggleMute} className="btn-ghost h-10 w-10 rounded-full p-0 text-sm" title={isMuted ? "Unmute" : "Mute"}>
+      {isMuted ? <FiMicOff /> : <FiMic />}
+     </button>
 
-    <div className="flex flex-wrap items-center gap-2">
-     {inCall ? (
-      <>
-       <button onClick={toggleMute} className="btn-ghost px-4 py-2 text-sm">
-        {isMuted ? <FiMicOff /> : <FiMic />}
-        {isMuted ? "Unmute" : "Mute"}
-       </button>
+     {hasLocalVideoTrack ? (
+      <button onClick={toggleCamera} className="btn-ghost h-10 w-10 rounded-full p-0 text-sm" title="Camera">
+       {isCameraEnabled ? <FiVideo /> : <FiVideoOff />}
+      </button>
+     ) : null}
 
-       {hasLocalVideoTrack ? (
-         <button onClick={toggleCamera} className="btn-ghost px-4 py-2 text-sm">
-          {isCameraEnabled ? <FiVideo /> : <FiVideoOff />}
-         {isCameraEnabled ? "Camera" : "Camera"}
-        </button>
-       ) : null}
+     <button onClick={() => setDetailsOpen((current) => !current)} className="btn-ghost h-10 w-10 rounded-full p-0 text-sm" title="Open call">
+      <FiPhone />
+     </button>
 
-       <button onClick={() => setDetailsOpen((current) => !current)} className="btn-ghost px-4 py-2 text-sm">
-        {detailsOpen ? "Hide" : "Show"} call
-       </button>
+     <button onClick={leaveHuddle} className="btn-danger h-10 w-10 rounded-full p-0 text-sm" title="Leave call">
+      <FiPhoneOff />
+     </button>
 
-       <button onClick={leaveHuddle} className="btn-danger px-4 py-2 text-sm">
-        <FiPhoneOff />
-        Leave
-       </button>
-      </>
-     ) : (
-      <>
-       <button
-        onClick={() => startHuddle("audio")}
-        disabled={!selectedChannel}
-        className="btn-secondary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <FiPhone />
-        Voice
-       </button>
-       <button
-        onClick={() => startHuddle("video")}
-        disabled={!selectedChannel}
-        className="btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <FiVideo />
-        Video
-       </button>
-      </>
-     )}
-    </div>
-   </div>
+     <span className="token-pill hidden lg:inline-flex">{status}</span>
+    </>
+   ) : (
+    <>
+     <button
+      onClick={() => startHuddle("audio")}
+      disabled={!selectedChannel}
+      className="btn-ghost h-10 w-10 rounded-full p-0 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+      title="Start voice huddle"
+     >
+      <FiPhone />
+     </button>
+     <button
+      onClick={() => startHuddle("video")}
+      disabled={!selectedChannel}
+      className="btn-ghost h-10 w-10 rounded-full p-0 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+      title="Start video huddle"
+     >
+      <FiVideo />
+     </button>
+    </>
+   )}
 
-   <div className="mt-3 flex flex-wrap gap-2">
-    <span className="token-pill border-[color:color-mix(in_srgb,var(--accent-primary)_26%,var(--border-color))] bg-[color:color-mix(in_srgb,var(--accent-primary)_12%,var(--surface-2))] text-[var(--accent-primary)]">
-     You {callMode === "video" && inCall ? "(video)" : ""}
-    </span>
-    {visibleParticipants.map((participant) => (
-     <span key={participant.socketId} className="token-pill">
-      {participant.user?.name || "Teammate"}
-      {participant.user?.mode === "video" ? " (video)" : ""}
+   {!inCall && huddleInvite?.active ? (
+    <div className="ml-1 hidden items-center gap-2 rounded-full border border-[color:var(--border-color)] bg-[color:var(--surface-2)] px-3 py-1.5 md:flex">
+     <span className="text-xs text-secondary">
+      {huddleInvite.startedBy?.name || "Someone"} started a {huddleInvite.mode} huddle
      </span>
-    ))}
-   </div>
+     <button
+      onClick={joinHuddle}
+      className="btn-secondary px-3 py-1.5 text-xs"
+      type="button"
+     >
+      Join
+     </button>
+    </div>
+   ) : null}
 
    {inCall && detailsOpen ? (
-    <div className="mt-4 grid gap-3 lg:grid-cols-3">
-     <div className="rounded-[22px] border border-[color:var(--border-color)] bg-[color:var(--surface-2)] p-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+     <div className="glass-shell max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[28px] p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+       <div>
+        <p className="eyebrow text-[11px] font-semibold uppercase tracking-[0.18em]">Huddle</p>
+        <h3 className="mt-1 text-lg font-semibold text-primary">{callMode === "video" ? "Video call" : "Voice call"}</h3>
+        <p className="mt-1 text-sm text-secondary">{status}</p>
+       </div>
+       <button onClick={() => setDetailsOpen(false)} className="btn-ghost px-4 py-2 text-sm">Close</button>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+       <span className="token-pill border-[color:color-mix(in_srgb,var(--accent-primary)_26%,var(--border-color))] bg-[color:color-mix(in_srgb,var(--accent-primary)_12%,var(--surface-2))] text-[var(--accent-primary)]">
+        You {callMode === "video" ? "(video)" : ""}
+       </span>
+       {visibleParticipants.map((participant) => (
+        <span key={participant.socketId} className="token-pill">
+         {participant.user?.name || "Teammate"}
+         {participant.user?.mode === "video" ? " (video)" : ""}
+        </span>
+       ))}
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+       <div className="rounded-[22px] border border-[color:var(--border-color)] bg-[color:var(--surface-2)] p-3">
       <div className="mb-2 flex items-center justify-between">
        <p className="text-sm font-semibold text-primary">You</p>
        <span className="token-pill">{callMode}</span>
@@ -370,10 +443,10 @@ const VoiceHuddle = ({ selectedChannel, currentUser }) => {
          autoPlay
          muted
          playsInline
-         className="h-44 w-full object-cover"
+         className="h-40 w-full object-cover"
         />
        ) : (
-        <div className="flex h-32 items-center justify-center text-sm text-secondary">
+        <div className="flex h-40 items-center justify-center text-sm text-secondary">
          Audio only
         </div>
        )}
@@ -399,16 +472,18 @@ const VoiceHuddle = ({ selectedChannel, currentUser }) => {
             node.srcObject = entry.stream
            }
           }}
-          className="h-32 w-full object-cover"
+          className="h-40 w-full object-cover"
          />
         ) : (
-         <div className="flex h-32 items-center justify-center text-sm text-secondary">
+         <div className="flex h-40 items-center justify-center text-sm text-secondary">
           Audio only
          </div>
         )}
-       </div>
       </div>
+     </div>
      ))}
+      </div>
+     </div>
     </div>
    ) : null}
   </div>

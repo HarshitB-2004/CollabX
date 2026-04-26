@@ -6,7 +6,12 @@ const fs = require("fs")
 
 const protect = require("../middleware/authMiddleware")
 
-const {getChannelMessages, uploadAttachment} = require("../controllers/messageController")
+const {
+    getChannelMessages,
+    uploadAttachment,
+    updateMessage,
+    deleteMessage
+} = require("../controllers/messageController")
 
 const uploadsDir = path.join(__dirname, "..", "uploads")
 
@@ -30,6 +35,10 @@ const upload = multer({
 })
 
 router.post("/upload",protect,upload.single("file"),uploadAttachment)
+
+router.put("/:messageId",protect,updateMessage)
+
+router.delete("/:messageId",protect,deleteMessage)
 
 router.get("/:channelId",protect,getChannelMessages)
 

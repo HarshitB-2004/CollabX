@@ -1,5 +1,6 @@
 const Channel = require("../models/Channel")
 const Project = require("../models/Project")
+const Message = require("../models/Message")
 
 // CREATE CHANNEL
 
@@ -60,6 +61,38 @@ exports.getProjectChannels = async (req,res)=>{
         })
 
         res.json(channels)
+
+    }catch(error){
+        res.status(500).json({error:error.message})
+    }
+
+}
+
+exports.deleteChannel = async (req,res)=>{
+
+    try{
+
+        const { channelId } = req.params
+
+        const channel = await Channel.findById(channelId)
+
+        if(!channel){
+            return res.status(404).json({message:"Channel not found"})
+        }
+
+        const project = await Project.findOne({
+            _id: channel.project,
+            members: req.user._id
+        })
+
+        if(!project){
+            return res.status(403).json({message:"Not authorized"})
+        }
+
+        await Message.deleteMany({ channel: channelId })
+        await Channel.findByIdAndDelete(channelId)
+
+        res.json({ message: "Channel deleted" })
 
     }catch(error){
         res.status(500).json({error:error.message})

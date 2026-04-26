@@ -2,6 +2,31 @@ const Channel = require("../models/Channel")
 const Project = require("../models/Project")
 const Task = require("../models/Task")
 
+const getDeadlineStatus = (dueDate) => {
+    if (!dueDate) return null
+
+    const now = new Date()
+    const due = new Date(dueDate)
+    const diffMs = due.getTime() - now.getTime()
+    const diffHours = Math.round(diffMs / (1000 * 60 * 60))
+
+    if (diffMs < 0) {
+        return {
+            level: "overdue",
+            hoursRemaining: diffHours
+        }
+    }
+
+    if (diffMs <= 1000 * 60 * 60 * 48) {
+        return {
+            level: "due-soon",
+            hoursRemaining: diffHours
+        }
+    }
+
+    return null
+}
+
 exports.getDashboardOverview = async (req, res) => {
     try {
         const userId = req.user._id
@@ -33,6 +58,25 @@ exports.getDashboardOverview = async (req, res) => {
             Task.countDocuments({ project: { $in: projectIds }, status: "completed" })
         ])
 
+        const deadlineAlerts = assignedTasks
+            .map((task) => {
+                const deadlineStatus = getDeadlineStatus(task.dueDate)
+
+                if (!deadlineStatus) return null
+
+                return {
+                    _id: task._id,
+                    title: task.title,
+                    projectName: task.project?.name || "Workspace",
+                    dueDate: task.dueDate,
+                    priority: task.priority,
+                    status: task.status,
+                    ...deadlineStatus
+                }
+            })
+            .filter(Boolean)
+            .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+
         res.json({
             profile: req.user,
             workspaceOverview: {
@@ -44,7 +88,8 @@ exports.getDashboardOverview = async (req, res) => {
             projects,
             assignedTasks,
             completedTasks,
-            recentTasks
+            recentTasks,
+            deadlineAlerts
         })
     } catch (error) {
         res.status(500).json({ error: error.message })

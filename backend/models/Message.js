@@ -40,6 +40,21 @@ const messageSchema = new mongoose.Schema({
             enum:["image","video","audio","file",""],
             default:""
         }
+    },
+
+    edited:{
+        type:Boolean,
+        default:false
+    },
+
+    deleted:{
+        type:Boolean,
+        default:false
+    },
+
+    deletedAt:{
+        type:Date,
+        default:null
     }
 
 },{timestamps:true})

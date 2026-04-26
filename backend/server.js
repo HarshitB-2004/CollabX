@@ -46,6 +46,25 @@ const Message = require("./models/Message")
 const activeVoiceRooms = new Map()
 
 const getRoomParticipants = (channelId) => activeVoiceRooms.get(channelId) || new Map()
+const emitHuddleState = (channelId, { startedBy = null } = {}) => {
+    const room = getRoomParticipants(channelId)
+    const participants = Array.from(room.entries()).map(([socketId, participant]) => ({
+        socketId,
+        user: participant
+    }))
+
+    io.to(channelId).emit("huddlePresence", {
+        channelId,
+        active: room.size > 0,
+        participantCount: room.size,
+        startedBy,
+        mode: participants[0]?.user?.mode || "audio"
+    })
+
+    if (room.size === 0) {
+        io.to(channelId).emit("huddleEnded", { channelId })
+    }
+}
 
 io.on("connection",(socket)=>{
 
@@ -63,6 +82,7 @@ io.on("connection",(socket)=>{
         socket.data.voiceUser = user
 
         const room = getRoomParticipants(channelId)
+        const wasEmpty = room.size === 0
         room.set(socket.id, user)
         activeVoiceRooms.set(channelId, room)
 
@@ -72,6 +92,17 @@ io.on("connection",(socket)=>{
         }))
 
         io.to(`voice:${channelId}`).emit("voiceParticipants", participants)
+
+        if (wasEmpty) {
+            io.to(channelId).emit("huddleStarted", {
+                channelId,
+                startedBy: user,
+                participantCount: room.size,
+                mode: user?.mode || "audio"
+            })
+        }
+
+        emitHuddleState(channelId, { startedBy: user })
     })
 
     socket.on("voiceOffer", ({ target, sdp, caller }) => {
@@ -124,6 +155,8 @@ io.on("connection",(socket)=>{
         io.to(`voice:${activeChannelId}`).emit("voiceUserLeft", {
             socketId: socket.id
         })
+
+        emitHuddleState(activeChannelId)
     })
 
     // send message
@@ -155,6 +188,16 @@ io.to(channelId).emit("receiveMessage",populatedMessage)
         io.to(channelId).emit("receiveMessage", message)
     })
 
+    socket.on("broadcastUpdatedMessage", ({ channelId, message }) => {
+        if (!channelId || !message) return
+        io.to(channelId).emit("messageUpdated", message)
+    })
+
+    socket.on("broadcastDeletedMessage", ({ channelId, message }) => {
+        if (!channelId || !message) return
+        io.to(channelId).emit("messageDeleted", message)
+    })
+
     socket.on("disconnect",()=>{
         const activeChannelId = socket.data.voiceChannelId
 
@@ -177,6 +220,8 @@ io.to(channelId).emit("receiveMessage",populatedMessage)
             io.to(`voice:${activeChannelId}`).emit("voiceUserLeft", {
                 socketId: socket.id
             })
+
+            emitHuddleState(activeChannelId)
         }
 
         console.log("User disconnected")

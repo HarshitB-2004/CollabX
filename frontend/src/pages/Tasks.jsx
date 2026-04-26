@@ -11,6 +11,9 @@ import {
  FiUser,
 } from "react-icons/fi"
 import API from "../services/api"
+import ThemeToggle from "../components/ThemeToggle"
+import LogoutButton from "../components/LogoutButton"
+import IconDeleteButton from "../components/IconDeleteButton"
 
 const defaultForm = {
  title: "",
@@ -35,6 +38,67 @@ const formatDate = (value) => {
   month: "short",
   year: "numeric",
  })
+}
+
+const getDeadlineAccent = (dueDate) => {
+ if (!dueDate) {
+  return {
+   dotClass: "bg-slate-400/70",
+   label: "Flexible",
+   cardStyle: {},
+  }
+ }
+
+ const now = new Date()
+ const due = new Date(dueDate)
+ const diffMs = due.getTime() - now.getTime()
+ const diffHours = diffMs / (1000 * 60 * 60)
+
+ if (diffMs < 0) {
+  return {
+   dotClass: "bg-rose-500",
+   label: "Overdue",
+   cardStyle: {
+    borderColor: "rgba(244, 63, 94, 0.24)",
+    background:
+     "linear-gradient(180deg, rgba(244, 63, 94, 0.1), color-mix(in srgb, var(--surface-2) 96%, transparent))",
+   },
+  }
+ }
+
+ if (diffHours <= 24) {
+  return {
+   dotClass: "bg-rose-400",
+   label: "Urgent",
+   cardStyle: {
+    borderColor: "rgba(251, 113, 133, 0.22)",
+    background:
+     "linear-gradient(180deg, rgba(251, 113, 133, 0.08), color-mix(in srgb, var(--surface-2) 96%, transparent))",
+   },
+  }
+ }
+
+ if (diffHours <= 72) {
+  return {
+   dotClass: "bg-amber-400",
+   label: "Due soon",
+   cardStyle: {
+    borderColor: "rgba(251, 191, 36, 0.2)",
+    background:
+     "linear-gradient(180deg, rgba(251, 191, 36, 0.08), color-mix(in srgb, var(--surface-2) 96%, transparent))",
+   },
+  }
+ }
+
+ return {
+  dotClass: "bg-emerald-400",
+  label: "On track",
+  cardStyle: {
+   borderColor: "rgba(52, 211, 153, 0.18)",
+   background:
+    "linear-gradient(180deg, rgba(52, 211, 153, 0.06), color-mix(in srgb, var(--surface-2) 96%, transparent))",
+  },
+ }
 }
 
 const Tasks = () => {
@@ -184,6 +248,19 @@ const Tasks = () => {
   }
  }
 
+ const deleteTaskFromCard = async (taskId, taskTitle) => {
+  const confirmed = window.confirm(`Delete task "${taskTitle}"?`)
+
+  if (!confirmed) return
+
+  try {
+   await API.delete(`/tasks/${taskId}`)
+   fetchTasks(selectedProjectId)
+  } catch (err) {
+   console.log(err)
+  }
+ }
+
  return (
   <div className="page-shell px-4 py-4 md:px-6">
    <div className="glass-shell mx-auto min-h-[calc(100vh-2rem)] max-w-[1600px] rounded-[28px] p-6 md:p-8">
@@ -227,6 +304,9 @@ const Tasks = () => {
        <FiPlus />
        Add task
       </button>
+
+      <ThemeToggle />
+      <LogoutButton />
      </div>
     </div>
 
@@ -284,19 +364,35 @@ const Tasks = () => {
 
           <div className="space-y-3">
            {columnTasks.length > 0 ? (
-            columnTasks.map((task) => (
+           columnTasks.map((task) => (
+             (() => {
+              const deadlineAccent = getDeadlineAccent(task.dueDate)
+
+              return (
              <div
               key={task._id}
               draggable
               onDragStart={(e) => handleDragStart(e, task._id)}
               onClick={() => openEditModal(task)}
-              className="stat-card cursor-pointer rounded-[24px] px-4 py-4 transition hover:translate-y-[-2px]"
+              className="cursor-pointer rounded-[24px] border px-4 py-4 shadow-[var(--shadow-soft)] transition hover:translate-y-[-2px]"
+              style={deadlineAccent.cardStyle}
              >
-              <div className="flex items-start justify-between gap-3">
-               <p className="text-sm font-semibold text-primary">{task.title}</p>
-               <span className="token-pill border-[color:var(--border-soft)] bg-[color:var(--surface-2)] text-[var(--text-secondary)]">
-                {task.priority}
-               </span>
+             <div className="flex items-start justify-between gap-3">
+               <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-primary">{task.title}</p>
+               </div>
+               <div className="flex items-center gap-2">
+                <span className="token-pill border-[color:var(--border-soft)] bg-[color:var(--surface-2)] text-[var(--text-secondary)]">
+                 {task.priority}
+                </span>
+                <IconDeleteButton
+                 title={`Delete ${task.title}`}
+                 onClick={(e) => {
+                  e.stopPropagation()
+                  deleteTaskFromCard(task._id, task.title)
+                 }}
+                />
+               </div>
               </div>
 
               <p className="mt-2 text-sm leading-6 text-secondary">
@@ -309,8 +405,13 @@ const Tasks = () => {
                 {task.assignedTo?.name || "Unassigned"}
                </span>
                <span className="token-pill">
+                <span className={`h-2 w-2 rounded-full ${deadlineAccent.dotClass}`}></span>
                 <FiCalendar size={12} />
                 {formatDate(task.dueDate)}
+               </span>
+               <span className="token-pill">
+                <span className={`h-2 w-2 rounded-full ${deadlineAccent.dotClass}`}></span>
+                {deadlineAccent.label}
                </span>
                <span className="token-pill">
                 <FiFlag size={12} />
@@ -322,6 +423,7 @@ const Tasks = () => {
                </span>
               </div>
              </div>
+            )})()
             ))
            ) : (
             <div className="glass-subtle rounded-[24px] border-dashed px-5 py-10 text-center">

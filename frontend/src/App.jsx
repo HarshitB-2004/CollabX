@@ -6,16 +6,11 @@ import Dashboard from "./pages/Dashboard"
 import Tasks from "./pages/Tasks"
 import Overview from "./pages/Overview"
 import People from "./pages/People"
-import ThemeToggle from "./components/ThemeToggle"
 import { ProtectedRoute, PublicRoute } from "./components/AuthRoutes"
 
 function App() {
   return (
     <div className="app-frame">
-      <div className="app-theme-toggle">
-        <ThemeToggle />
-      </div>
-
       <Routes>
         <Route
           path="/"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import API from "../services/api"
 import { FiHash, FiMessageSquare, FiPlus } from "react-icons/fi"
+import IconDeleteButton from "./IconDeleteButton"
 
 const ChannelList = ({ selectedProject, selectedChannel, setSelectedChannel }) => {
  const [channels, setChannels] = useState([])
@@ -76,6 +77,24 @@ const ChannelList = ({ selectedProject, selectedChannel, setSelectedChannel }) =
   }
  }
 
+ const deleteChannel = async (channelId, channelName) => {
+  const confirmed = window.confirm(`Delete channel "${channelName}"?`)
+
+  if (!confirmed) return
+
+  try {
+   await API.delete(`/channels/${channelId}`)
+   setChannels((prev) => prev.filter((channel) => channel._id !== channelId))
+
+   if (selectedChannel?._id === channelId) {
+    setSelectedChannel(null)
+   }
+  } catch (err) {
+   console.log(err)
+   alert(err.response?.data?.message || "Could not delete channel")
+  }
+ }
+
  return (
   <aside className="channel-sidebar flex h-full min-h-0 flex-col border-r border-[color:var(--border-soft)] bg-[color:color-mix(in_srgb,var(--surface-1)_96%,transparent)] px-4 py-4">
    <div className="mb-4 flex items-center justify-between gap-3">
@@ -96,7 +115,7 @@ const ChannelList = ({ selectedProject, selectedChannel, setSelectedChannel }) =
     </p>
     <p className="mt-1 text-xs leading-5 text-secondary">
      {selectedProject
-      ? "Choose a conversation space."
+      ? "Choose a conversation to focus the chat."
       : "Choose a workspace first."}
     </p>
    </div>
@@ -107,7 +126,7 @@ const ChannelList = ({ selectedProject, selectedChannel, setSelectedChannel }) =
     className="btn-ghost mb-4 rounded-2xl px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
    >
     <FiPlus />
-    New Channel
+    New channel
    </button>
 
    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -118,25 +137,34 @@ const ChannelList = ({ selectedProject, selectedChannel, setSelectedChannel }) =
 
        return (
         <li key={channel._id}>
-         <button
-          onClick={() => setSelectedChannel(channel)}
-          className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+         <div
+          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 transition ${
            isActive
             ? "accent-ring bg-[color:color-mix(in_srgb,var(--accent-secondary)_12%,var(--surface-2))] text-primary shadow-[var(--shadow-soft)]"
             : "border-[color:var(--border-soft)] bg-[color:var(--surface-3)] text-secondary hover:border-[color:var(--border-color)] hover:bg-[color:var(--surface-2)]"
           }`}
          >
-          <span className="glass-subtle rounded-xl p-2 text-primary">
-           <FiHash size={14} />
-          </span>
-          <div className="min-w-0">
-           <p className="truncate text-sm font-semibold">{channel.name}</p>
-           <p className="text-xs text-muted">Messages</p>
-          </div>
-         </button>
+          <button
+           onClick={() => setSelectedChannel(channel)}
+           className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          >
+           <span className="glass-subtle rounded-xl p-2 text-primary">
+            <FiHash size={14} />
+           </span>
+           <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{channel.name}</p>
+            <p className="text-xs text-muted">Messages</p>
+           </div>
+          </button>
+
+          <IconDeleteButton
+           title={`Delete ${channel.name}`}
+           onClick={() => deleteChannel(channel._id, channel.name)}
+          />
+         </div>
         </li>
-       )
-      })}
+      )
+     })}
      </ul>
     ) : (
      <div className="glass-subtle rounded-3xl border-dashed px-5 py-10 text-center">

@@ -1,5 +1,8 @@
 const Project = require("../models/Project")
 const User = require("../models/User")
+const Channel = require("../models/Channel")
+const Task = require("../models/Task")
+const Message = require("../models/Message")
 
 // CREATE PROJECT
 
@@ -85,6 +88,35 @@ exports.addMember = async (req,res)=>{
         const populatedProject = await Project.findById(project._id).populate("members","name email avatar")
 
         res.json(populatedProject)
+
+    }catch(error){
+        res.status(500).json({error:error.message})
+    }
+}
+
+exports.deleteProject = async (req,res)=>{
+
+    try{
+
+        const { projectId } = req.params
+
+        const project = await Project.findOne({
+            _id: projectId,
+            owner: req.user._id
+        })
+
+        if(!project){
+            return res.status(404).json({message:"Project not found or only the owner can delete it"})
+        }
+
+        const channelIds = await Channel.find({ project: projectId }).distinct("_id")
+
+        await Message.deleteMany({ channel: { $in: channelIds } })
+        await Channel.deleteMany({ project: projectId })
+        await Task.deleteMany({ project: projectId })
+        await Project.findByIdAndDelete(projectId)
+
+        res.json({ message: "Workspace deleted" })
 
     }catch(error){
         res.status(500).json({error:error.message})

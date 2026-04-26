@@ -9,6 +9,8 @@ import {
  FiX,
 } from "react-icons/fi"
 import API from "../services/api"
+import ThemeToggle from "../components/ThemeToggle"
+import LogoutButton from "../components/LogoutButton"
 
 const People = () => {
  const navigate = useNavigate()
@@ -162,6 +164,9 @@ const People = () => {
         </option>
        ))}
       </select>
+
+      <ThemeToggle />
+      <LogoutButton />
      </div>
     </div>
 

@@ -90,3 +90,79 @@ exports.uploadAttachment = async (req, res) => {
         res.status(500).json({ error: error.message })
     }
 }
+
+exports.updateMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params
+        const text = (req.body.text || "").trim()
+
+        if (!text) {
+            return res.status(400).json({ message: "Message text is required" })
+        }
+
+        const message = await Message.findById(messageId)
+
+        if (!message || message.deleted) {
+            return res.status(404).json({ message: "Message not found" })
+        }
+
+        const channel = await ensureChannelAccess(message.channel, req.user._id)
+
+        if (!channel) {
+            return res.status(404).json({ message: "Channel not found" })
+        }
+
+        if (message.sender?.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: "You can only edit your own messages" })
+        }
+
+        message.text = text
+        message.edited = true
+        await message.save()
+
+        const populatedMessage = await Message.findById(message._id).populate("sender", "name email")
+
+        res.json(populatedMessage)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+}
+
+exports.deleteMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params
+        const message = await Message.findById(messageId)
+
+        if (!message || message.deleted) {
+            return res.status(404).json({ message: "Message not found" })
+        }
+
+        const channel = await ensureChannelAccess(message.channel, req.user._id)
+
+        if (!channel) {
+            return res.status(404).json({ message: "Channel not found" })
+        }
+
+        if (message.sender?.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: "You can only delete your own messages" })
+        }
+
+        message.text = ""
+        message.attachment = {
+            fileName: "",
+            fileUrl: "",
+            mimeType: "",
+            size: 0,
+            kind: ""
+        }
+        message.deleted = true
+        message.deletedAt = new Date()
+        await message.save()
+
+        const populatedMessage = await Message.findById(message._id).populate("sender", "name email")
+
+        res.json(populatedMessage)
+    } catch (error) {
+        res.status(500).json({ error: error.message })
+    }
+}

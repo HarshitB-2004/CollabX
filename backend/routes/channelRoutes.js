@@ -5,11 +5,14 @@ const protect = require("../middleware/authMiddleware")
 
 const {
 createChannel,
-getProjectChannels
+getProjectChannels,
+deleteChannel
 } = require("../controllers/channelController")
 
 router.post("/create",protect,createChannel)
 
 router.get("/project/:projectId",protect,getProjectChannels)
+
+router.delete("/:channelId",protect,deleteChannel)
 
 module.exports = router

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import API from "../services/api"
 import { FiFolderPlus, FiLayers } from "react-icons/fi"
+import IconDeleteButton from "./IconDeleteButton"
 
 const Sidebar = ({ selectedProject, setSelectedProject, setSelectedChannel }) => {
  const [projects, setProjects] = useState([])
@@ -68,6 +69,26 @@ const Sidebar = ({ selectedProject, setSelectedProject, setSelectedChannel }) =>
   }
  }
 
+ const deleteProject = async (projectId, projectName) => {
+  const confirmed = window.confirm(`Delete workspace "${projectName}"? This will remove its channels, messages, and tasks.`)
+
+  if (!confirmed) return
+
+  try {
+   await API.delete(`/projects/${projectId}`)
+   setProjects((prev) => prev.filter((project) => project._id !== projectId))
+
+   if (selectedProject?._id === projectId) {
+    setSelectedProject(null)
+    setSelectedChannel(null)
+    localStorage.removeItem("activeProjectId")
+   }
+  } catch (err) {
+   console.log(err)
+   alert(err.response?.data?.message || "Could not delete workspace")
+  }
+ }
+
  return (
   <aside className="workspace-sidebar flex h-full min-h-0 flex-col border-r border-[color:var(--border-soft)] bg-[color:color-mix(in_srgb,var(--surface-1)_96%,transparent)] px-4 py-4">
    <div className="mb-4 flex items-center justify-between gap-3">
@@ -97,28 +118,39 @@ const Sidebar = ({ selectedProject, setSelectedProject, setSelectedChannel }) =>
 
       return (
        <li key={project._id}>
-        <button
-         onClick={() => {
-          setSelectedProject(project)
-          setSelectedChannel(null)
-          localStorage.setItem("activeProjectId", project._id)
-         }}
-         className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+        <div
+         className={`rounded-2xl border px-4 py-3 transition ${
           isActive
-          ? "accent-ring bg-[color:color-mix(in_srgb,var(--accent-primary)_12%,var(--surface-2))] text-primary shadow-[var(--shadow-soft)]"
-          : "border-[color:var(--border-soft)] bg-[color:var(--surface-3)] text-secondary hover:border-[color:var(--border-color)] hover:bg-[color:var(--surface-2)]"
+           ? "accent-ring bg-[color:color-mix(in_srgb,var(--accent-primary)_12%,var(--surface-2))] text-primary shadow-[var(--shadow-soft)]"
+           : "border-[color:var(--border-soft)] bg-[color:var(--surface-3)] text-secondary hover:border-[color:var(--border-color)] hover:bg-[color:var(--surface-2)]"
          }`}
         >
-         <div className="flex items-center justify-between gap-3">
-          <span className="truncate text-sm font-semibold">{project.name}</span>
-          <span className="token-pill px-2 py-1 text-[10px] uppercase tracking-[0.12em]">
-           {project.members?.length || 1}
-          </span>
+         <div className="flex items-start justify-between gap-3">
+          <button
+           onClick={() => {
+            setSelectedProject(project)
+            setSelectedChannel(null)
+            localStorage.setItem("activeProjectId", project._id)
+           }}
+           className="min-w-0 flex-1 text-left"
+          >
+           <div className="flex items-center justify-between gap-3">
+            <span className="truncate text-sm font-semibold">{project.name}</span>
+            <span className="token-pill px-2 py-1 text-[10px] uppercase tracking-[0.12em]">
+             {project.members?.length || 1}
+            </span>
+           </div>
+           <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
+            {project.description || "No description added yet."}
+           </p>
+          </button>
+
+          <IconDeleteButton
+           title={`Delete ${project.name}`}
+           onClick={() => deleteProject(project._id, project.name)}
+          />
          </div>
-         <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">
-          {project.description || "No description added yet."}
-         </p>
-        </button>
+        </div>
        </li>
       )
      })}
